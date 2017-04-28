@@ -141,7 +141,7 @@ void fixid(char * fname)
     Q = P;
 
     for(ptype = 0; ptype < 6; ptype ++) {
-        if(End[ptype] == Start[ptype]) continue;
+        if(TotNumPart[ptype] == 0) continue;
         char blockname[80];
         BigArray array[1];
         BigBlockPtr ptr[1];
@@ -157,6 +157,7 @@ void fixid(char * fname)
         } else {
             endrun(0, "failed to read ID.broken block, ptype = %d\n", ptype);
         }
+        message(0, "Finished reading %s\n", blockname);
         sprintf(blockname, "%d/Generation.broken", ptype);
         if(0 == big_file_mpi_open_block(bf, bb, blockname, MPI_COMM_WORLD)) {
             /* the old generation is not really used, but we read anyways to ensure the back exists */
@@ -169,6 +170,7 @@ void fixid(char * fname)
         } else {
             endrun(0, "failed to read Generation.broken block, ptype = %d\n", ptype);
         }
+        message(0, "Finished reading %s\n", blockname);
         sprintf(blockname, "%d/StarFormationTime", ptype);
         if(0 == big_file_mpi_open_block(bf, bb, blockname, MPI_COMM_WORLD)) {
             big_array_init(array, &Q[0].sft, "f4", 1, (size_t []) {End[ptype] - Start[ptype]}, (ptrdiff_t []) {sizeof(P[0])});
@@ -181,6 +183,7 @@ void fixid(char * fname)
                 Q[i].sft = 100.;
             }
         }
+        message(0, "Finished reading %s\n", blockname);
         for(i = 0; i < End[ptype] - Start[ptype]; i ++) {
             Q[i].oldid = Q[i].id;
             Q[i].id = Q[i].id & 0xffffffffffffff; /* keep the lower 12 bytes */
@@ -194,11 +197,13 @@ void fixid(char * fname)
     }
 
     uint64_t LocalN1 = LocalN;
+    message(0, "Beging sorting \n");
 
     Q = Q0;
     mpsort_mpi_newarray(P, LocalN,
                 Q, LocalN1, sizeof(P[0]), radix_by_id, 8, NULL, MPI_COMM_WORLD);
 
+    message(0, "Finished sorting \n");
     /* send the first eqv group to the previous rank in case it is actually part of the previous rank. */
     uint64_t id0 = Q[0].id;
     /* but do not send anything from the first rank */
@@ -207,10 +212,10 @@ void fixid(char * fname)
     }
     int Nsend = i;
     int Nrecv;
-    MPI_Sendrecv(&Nsend, 1, MPI_INT, (ThisTask - 1) % NTask, 0,
+    MPI_Sendrecv(&Nsend, 1, MPI_INT, (NTask + ThisTask - 1) % NTask, 0,
                  &Nrecv, 1, MPI_INT, (ThisTask + 1) % NTask, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-    MPI_Sendrecv(Q, sizeof(P[0]) * Nsend, MPI_BYTE, (ThisTask - 1) % NTask, 1,
+    MPI_Sendrecv(Q, sizeof(P[0]) * Nsend, MPI_BYTE, (NTask + ThisTask - 1) % NTask, 1,
                  Q + LocalN1, sizeof(P[0]) * Nrecv, MPI_BYTE, (ThisTask + 1) % NTask, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     LocalN1 += Nrecv;
     LocalN1 -= Nsend;
@@ -226,7 +231,9 @@ void fixid(char * fname)
     }
 
     /* return the particles to P */
+    message(0, "Beging sorting \n");
     mpsort_mpi_newarray(Q, LocalN1, P, LocalN, sizeof(P[0]), radix_by_rank, 8, NULL, MPI_COMM_WORLD);
+    message(0, "Finished sorting \n");
     for(i = 0; i <= LocalN; i ++) {
         if(P[i].oldid != P[i].id || P[i].oldgeneration != P[i].generation) {
             message(1, "old id %08lX new id %08lX, ptype=%d, oldgen=%d, newgen=%d\n", P[i].oldid, P[i].id, P[i].ptype, P[i].oldgeneration, P[i].generation);
@@ -235,7 +242,7 @@ void fixid(char * fname)
     /* write */
     Q = P;
     for(ptype = 0; ptype < 6; ptype ++) {
-        if(End[ptype] == Start[ptype]) continue;
+        if(TotNumPart[ptype] == 0) continue;
         char blockname[80];
         BigArray array[1];
         BigBlockPtr ptr[1];
@@ -250,6 +257,7 @@ void fixid(char * fname)
         } else {
             endrun(0, "failed to write ID block, ptype = %d\n", ptype);
         }
+        message(0, "Finished writing %s\n", blockname);
         sprintf(blockname, "%d/Generation", ptype);
         if(0 == big_file_mpi_create_block(bf, bb, blockname, "u1", 1, NFileGeneration, TotNumPart[ptype], MPI_COMM_WORLD)) {
             /* the old generation is not really used, but we read anyways to ensure the back exists */
@@ -261,6 +269,7 @@ void fixid(char * fname)
         } else {
             endrun(0, "failed to read Generation block, ptype = %d\n", ptype);
         }
+        message(0, "Finished writing %s\n", blockname);
         Q += End[ptype] - Start[ptype];
     }
     free(Q0);
