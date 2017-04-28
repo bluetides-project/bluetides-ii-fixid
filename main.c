@@ -328,12 +328,42 @@ void fixid(char * fname)
     message(0, "Beging sorting \n");
     mpsort_mpi_newarray(Q, LocalN1, P, LocalN, sizeof(P[0]), radix_by_rank, 8, NULL, MPI_COMM_WORLD);
     message(0, "Finished sorting \n");
-    int64_t Nmod = 0;
-    for(i = 0; i <= LocalN; i ++) {
-        if(P[i].oldid != P[i].id || P[i].oldgeneration != P[i].generation) {
-            message(1, "old id %08lX new id %08lX, ptype=%d, oldgen=%d, newgen=%d\n", P[i].oldid, P[i].id, P[i].ptype, P[i].oldgeneration, P[i].generation);
+
+    {
+        int64_t Nmod = 0;
+        for(i = 0; i <= LocalN; i ++) {
+            if(P[i].oldid != P[i].id) {
+                //message(1, "old id %08lX new id %08lX, ptype=%d, oldgen=%d, newgen=%d\n", P[i].oldid, P[i].id, P[i].ptype, P[i].oldgeneration, P[i].generation);
+                Nmod ++;
+            }
         }
-        Nmod ++;
+
+        int64_t TotNmod = 0;
+        MPI_Allreduce(&Nmod, &TotNmod, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+
+        message(0, "Modified ID of %ld particles\n", TotNmod);
+
+        uint64_t (* buf)[2] = malloc(sizeof(buf[0]) * Nmod);
+
+        BigArray array[1] = {0};
+        BigBlock bb[1] = {0};
+        BigBlockPtr ptr[1] = {0};
+        big_array_init(array, buf, "u8", 2, (size_t []) {Nmod, 2}, NULL);
+        Nmod = 0;
+        for(i = 0; i <= LocalN; i ++) {
+            if(P[i].oldid != P[i].id) {
+                buf[Nmod][0] = P[i].oldid;
+                buf[Nmod][1] = P[i].id;
+                Nmod ++;
+            }
+        }
+        if(0 == big_file_mpi_create_block(bf, bb, "IDRemapTable", "u8", 2, 1, TotNmod, MPI_COMM_WORLD)) {
+            char comments[] = "The ID of particles has been remapped to ensure uniqueness. GENERATION is also rewritten; maybe inconsistent between times.";
+            big_block_set_attr(bb, "COMMENTS", comments, "S1", strlen(comments) + 1);
+            big_block_seek(bb, ptr, 0);
+            big_block_mpi_write(bb, ptr, array, 0, MPI_COMM_WORLD);
+            big_block_mpi_close(bb, MPI_COMM_WORLD);
+        }
     }
     /* write */
     Q = P;
