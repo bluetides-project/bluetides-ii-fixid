@@ -14,6 +14,7 @@
 #define SEEDMASS 5e-5
 //#define BT_I_MAX_SFT 0.11111111111111
 #define BT_I_MAX_SFT 0.0
+#define IDMASK ((1L << 56L) - 1)
 
 typedef struct {
     uint64_t oldid;
@@ -74,6 +75,8 @@ cmp_by_sft(const void * ptr1, const void * ptr2)
 void
 fix_one(dtype * P, uint64_t size)
 {
+    uint64_t idgroup = P[0].id;
+
     if(P[0].ptype == 1) {
         if(size != 1) {
             endrun(1, "dm base id is not unique %08X : %d \n", P[0].id, size);
@@ -117,8 +120,10 @@ fix_one(dtype * P, uint64_t size)
     /* we only consider number of swallowed BT-II BHs. */
 
     if(N[0] == 0) { /* gas either converted to Star or was swallowed */
-        for(i = 0; i < size; i ++) {
+        for(i = 0; i < size - 1; i ++) {
             P[i].generation = i + 1;
+            uint64_t g = P[i].generation;
+            P[i].id += (g << 56L);
         }
         int gasgen = size - 1;
         if(!isclose(MassSum, MassTable[0], 1e-4)) {
@@ -129,18 +134,25 @@ fix_one(dtype * P, uint64_t size)
                 /* These BH must have formed before the last conversion, but we don't know if they are before or after
                  * any other particles. assume they are after. */
                 P[size - 1].generation = gasgen + NswallowedBH;
+                P[size - 1].id &= IDMASK;
             } else {
                 /* a mixture of BH and GAS are swallowed, assume all swallowed after the last formation. */
                 /*The last gas has been swallowed, no need to special treat its gen */
+                P[size - 1].generation = size;
+                uint64_t g = P[size - 1].generation;
+                P[size - 1].id += (g << 56L);
             }
         } else {
             /* Nother was swallowed, then last obj is converted from gas, preserving the generation number */
             P[size - 1].generation = gasgen;
+            P[size - 1].id &= IDMASK;
         }
     } else {
-        /**/
-        for(i = 0; i < size; i ++) {
+        /* Last is gas. */
+        for(i = 0; i < size - 1; i ++) {
             P[i].generation = i + 1;
+            uint64_t g = P[i].generation;
+            P[i].id += (g << 56L);
         }
         int gasgen = size - 1;
         if(!isclose(MassSum, MassTable[0], 1e-4)) {
@@ -149,13 +161,8 @@ fix_one(dtype * P, uint64_t size)
         }
 
         P[size - 1].generation = gasgen;
-    }
-    uint64_t idgroup = P[0].id;
-    for(i = 0; i < size; i ++) {
-        if(P[i].ptype != 0) {
-            uint64_t g = P[i].generation;
-            P[i].id += (g << 56L);
-        }
+        /* keep the oriignal id*/
+        P[size - 1].id &= IDMASK;
     }
     // message(1, "fix id group %08lX Ngas = %d Nstar=%d, Nbh=%d Missing Mass %g\n", idgroup, N[0], N[4], N[5], MassTable[0] - MassSum);
 }
@@ -280,7 +287,7 @@ void fixid(char * fname)
         }
         for(i = 0; i < End[ptype] - Start[ptype]; i ++) {
             Q[i].oldid = Q[i].id;
-            Q[i].id = Q[i].id & 0xffffffffffffff; /* keep the lower 12 bytes */
+            Q[i].id = Q[i].id & IDMASK;
             Q[i].ptype = ptype;
         }
         Q += End[ptype] - Start[ptype];
