@@ -1,6 +1,6 @@
 [submodule "mpsort"]
 	path = mpsort
-	url = git@github.com:rainwoodman/mp-sort
+	url = https://github.com/rainwoodman/mp-sort
 [submodule "bigfile"]
 	path = bigfile
-	url = git@github.com:rainwoodman/bigfile
+	url = https://github.com/rainwoodman/bigfile
