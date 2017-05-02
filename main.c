@@ -174,8 +174,8 @@ void fixid(char * fname)
     MPI_Comm_size(MPI_COMM_WORLD, &NTask);
     MPI_Comm_rank(MPI_COMM_WORLD, &ThisTask);
 
-    int NFileID;
-    int NFileGeneration;
+    int NFileID[6];
+    int NFileGeneration[6];
 
     BigFile bf[1] = {0};
     BigBlock bb[1] = {0};
@@ -229,7 +229,7 @@ void fixid(char * fname)
             big_array_init(array, &Q[0].id, "u8", 1, (size_t []) {End[ptype] - Start[ptype]}, (ptrdiff_t []) {sizeof(P[0])});
             big_block_seek(bb, ptr, 0);
             big_block_mpi_read(bb, ptr, array, 0, MPI_COMM_WORLD);
-            NFileID = bb->Nfile;
+            NFileID[ptype] = bb->Nfile;
             big_block_mpi_close(bb, MPI_COMM_WORLD);
             message(0, "Finished reading %s\n", blockname);
         } else {
@@ -241,7 +241,7 @@ void fixid(char * fname)
             big_array_init(array, &Q[0].oldgeneration, "u1", 1, (size_t []) {End[ptype] - Start[ptype]}, (ptrdiff_t []) {sizeof(P[0])});
             big_block_seek(bb, ptr, 0);
             big_block_mpi_read(bb, ptr, array, 0, MPI_COMM_WORLD);
-            NFileGeneration = bb->Nfile;
+            NFileGeneration[ptype] = bb->Nfile;
             big_block_mpi_close(bb, MPI_COMM_WORLD);
             message(0, "Finished reading %s\n", blockname);
         } else {
@@ -253,7 +253,6 @@ void fixid(char * fname)
             big_array_init(array, &Q[0].mass, "f4", 1, (size_t []) {End[ptype] - Start[ptype]}, (ptrdiff_t []) {sizeof(P[0])});
             big_block_seek(bb, ptr, 0);
             big_block_mpi_read(bb, ptr, array, 0, MPI_COMM_WORLD);
-            NFileID = bb->Nfile;
             big_block_mpi_close(bb, MPI_COMM_WORLD);
             message(0, "Finished reading %s\n", blockname);
         } else {
@@ -382,7 +381,7 @@ void fixid(char * fname)
         int64_t i;
 
         sprintf(blockname, "%d/ID", ptype);
-        if(0 == big_file_mpi_create_block(bf, bb, blockname, "u8", 1, NFileID, TotNumPart[ptype], MPI_COMM_WORLD)) {
+        if(0 == big_file_mpi_create_block(bf, bb, blockname, "u8", 1, NFileID[ptype], TotNumPart[ptype], MPI_COMM_WORLD)) {
             big_array_init(array, &Q[0].id, "u8", 1, (size_t []) {End[ptype] - Start[ptype]}, (ptrdiff_t []) {sizeof(P[0])});
             big_block_seek(bb, ptr, 0);
             big_block_mpi_write(bb, ptr, array, 0, MPI_COMM_WORLD);
@@ -392,7 +391,7 @@ void fixid(char * fname)
         }
         message(0, "Finished writing %s\n", blockname);
         sprintf(blockname, "%d/Generation", ptype);
-        if(0 == big_file_mpi_create_block(bf, bb, blockname, "u1", 1, NFileGeneration, TotNumPart[ptype], MPI_COMM_WORLD)) {
+        if(0 == big_file_mpi_create_block(bf, bb, blockname, "u1", 1, NFileGeneration[ptype], TotNumPart[ptype], MPI_COMM_WORLD)) {
             /* the old generation is not really used, but we read anyways to ensure the back exists */
             big_array_init(array, &Q[0].generation, "u1", 1, (size_t []) {End[ptype] - Start[ptype]}, (ptrdiff_t []) {sizeof(P[0])});
             big_block_seek(bb, ptr, 0);
